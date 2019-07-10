@@ -18,7 +18,7 @@ public:
 	bool isEof(void) { return m_trainingDataFile.eof(); }
 	void getTopology(vector<unsigned>& topology);
 
-	unsigned getNextInput(vector<double>& inputVals);
+	unsigned getNextInputs(vector<double>& inputVals);
 	unsigned getTargetOutputs(vector<double>& targetOutputVals);
 
 private:
@@ -26,7 +26,9 @@ private:
 	
 };
 
-unsigned TrainingData::getNextInput(vector<double>& inputVals) {
+unsigned TrainingData::getNextInputs(vector<double>& inputVals) {
+	inputVals.clear();
+
 	string line; 
 	string label;
 
@@ -44,6 +46,8 @@ unsigned TrainingData::getNextInput(vector<double>& inputVals) {
 }
 
 unsigned TrainingData::getTargetOutputs(vector<double>& targetOutputVals) {
+	targetOutputVals.clear();
+
 	string line;
 	string label;
 
@@ -106,8 +110,8 @@ public:
 	void setOutputVal(double val) { m_outputVal = val; }
 	double getOutputVal(void) const { return m_outputVal; }
 	void feedForward(const Layer& prevLayer);
-	void calcOutputGradients(double const targetVal);
-	void calHiddenGradients(const Layer& nextLayer);
+	void calcOutputGradients(double targetVal);
+	void calcHiddenGradients(const Layer& nextLayer);
 	void updateInputWeights(Layer& prevLayer);
 
 
@@ -126,6 +130,9 @@ private:
 
 };
 
+double Neuron::eta = 0.15;
+double Neuron::alpha = 0.5;
+
 void Neuron::updateInputWeights(Layer& prevLayer) {
 	
 	for (unsigned n = 0; n < prevLayer.size(); n++) {
@@ -135,12 +142,12 @@ void Neuron::updateInputWeights(Layer& prevLayer) {
 		double newDeltaWeight = eta * neuron.getOutputVal() * m_gradient
 								+ alpha * oldDeltaWeight;
 
+		neuron.m_outpoutWeights[m_myIndex].deltaWeight = newDeltaWeight;
+		neuron.m_outpoutWeights[m_myIndex].weight += newDeltaWeight;
+
 	}
 }
 
-
-double Neuron::eta = 0.15;
-double Neuron::alpha = 0.5;
 
 double Neuron::sumDOW(const Layer& nextLayer) const {
 
@@ -151,13 +158,13 @@ double Neuron::sumDOW(const Layer& nextLayer) const {
 	return sum;
 }
 
-void Neuron::calHiddenGradients(const Layer& nextLayer) {
+void Neuron::calcHiddenGradients(const Layer& nextLayer) {
 	double dow = sumDOW(nextLayer);
 	m_gradient = dow * Neuron::transferFunctionDerivative(m_outputVal);
 
 };
 
-void Neuron::calcOutputGradients(double const targetVal) {
+void Neuron::calcOutputGradients(double targetVal) {
 	double delta = targetVal - m_outputVal;
 	m_gradient = delta * Neuron::transferFunctionDerivative(m_outputVal);
 };
@@ -214,8 +221,10 @@ private:
 	vector<Layer> m_layers;
 	double m_error;
 	double m_recentAverageError;
-	double m_recentAverageSmoothingFactor;
+	static double m_recentAverageSmoothingFactor;
 };
+
+double Net::m_recentAverageSmoothingFactor = 100.0;
 
 void Net::getResults(vector<double>& resultVals) const {
 
@@ -236,7 +245,8 @@ void Net::backProp(const vector<double>& targetVals) {
 		double delta = targetVals[n] - outputLayer[n].getOutputVal();
 		m_error += delta * delta;
 	}
-	m_error = sqrt((1 / (outputLayer.size()-1)) * (m_error));
+	m_error /= outputLayer.size() - 1;
+	m_error = sqrt(m_error);
 
 	m_recentAverageError = (m_recentAverageError * m_recentAverageSmoothingFactor + m_error) 
 							/ (m_recentAverageSmoothingFactor + 1.0);
@@ -253,7 +263,7 @@ void Net::backProp(const vector<double>& targetVals) {
 		Layer& nextLayer = m_layers[layerNum + 1];
 
 		for (unsigned n = 0; n < hiddenLayer.size(); n++) {
-			hiddenLayer[n].calHiddenGradients(nextLayer);
+			hiddenLayer[n].calcHiddenGradients(nextLayer);
 		}
 	}
 
@@ -299,6 +309,8 @@ Net::Net(const vector<unsigned>& topology) {
 				m_layers.back().push_back(Neuron(numOutputs, neuronNum));
 			}
 
+			m_layers.back().back().setOutputVal(1.0);
+
 	}
 
 }
@@ -333,14 +345,14 @@ int main() {
 	int correctNum = 0;
 
 	while (!trainData.isEof()) {
-		inputVals.clear();
-		targetVals.clear();
-		resultVals.clear();
+		//inputVals.clear();
+		//targetVals.clear();
+		//resultVals.clear();
 
 		trainingPass++;
 		std::cout << endl << "Pass " << trainingPass;
 
-		if (trainData.getNextInput(inputVals) != topology[0]) {
+		if (trainData.getNextInputs(inputVals) != topology[0]) {
 			break;
 		}
 		showVectorVals(": Inputs:", inputVals);
